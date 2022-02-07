@@ -288,7 +288,7 @@ def return_viterbi_prediction(visible_states, markov_chain_transition_mat, marko
     
     """moods = ['H', 'H', 'G', 'G', 'G', 'H']"""
     probabilities = None
-    predicted_hidden_states = []
+    predicted_hidden_states = np.array([])
     vis_states_qty = len(markov_chain_transition_mat)
     hid_states_qty = len(markov_chain_emissions_mat)
     
@@ -300,13 +300,14 @@ def return_viterbi_prediction(visible_states, markov_chain_transition_mat, marko
       probabilities.append((p_s*p_sg, p_r*p_rg))"""
     
     #stage 1 v2
-    probabilities = np.array([initial_dis(0) * markov_chain_emissions_mat[0][visible_states[0]]])
+    
+    probabilities = np.array([initial_dis[0] * markov_chain_emissions_mat[0][visible_states[0]]])
     for i in range(1, hid_states_qty):
-        probabilities = np.vstack((probabilities, initial_dis(i) * markov_chain_emissions_mat[i][visible_states[0]]))
+        probabilities = np.vstack((probabilities, initial_dis[i] * markov_chain_emissions_mat[i][visible_states[0]]))
         
 
     #stage 2 original
-    for i in range(1, len(moods)):
+    """for i in range(1, len(moods)):
       yesterday_sunny, yesterday_rainy = probabilities[-1]
       if moods[i] =='H':
         today_sunny = max(yesterday_sunny*p_ss*p_sh, yesterday_rainy*p_rs*p_sh)
@@ -315,26 +316,50 @@ def return_viterbi_prediction(visible_states, markov_chain_transition_mat, marko
       else:
         today_sunny = max(yesterday_sunny*p_ss*p_sg, yesterday_rainy*p_rs*p_sg)
         today_rainy = max(yesterday_sunny*p_sr*p_rg, yesterday_rainy*p_rr*p_rg)
-        probabilities.append((today_sunny, today_rainy))
+        probabilities.append((today_sunny, today_rainy))"""
+    
+    #this none array is added to the end of each 
+    none_array = np.array([None])
+    for hidden_state in range(1, hid_states_qty):
+        none_array = np.vstack((none_array, [None]))
+    
     
     #stage 2 v2
     for time_step in range(1, len(visible_states)):
+        now_probabilities = np.array([])
         for hidden_state in range(0, hid_states_qty):
-            np.append(arr, values)
-        
-        
-        
-        
-    
-    
-    for p in probabilities:
+            probabilities = np.insert(probabilities, [len(probabilities[0])], none_array, axis=1)
+            new_prob_temp = np.array([])
+            for previous_hidden_state in range(0, hid_states_qty):
+                prob_of_transition_from_potential_previous_hidden_state = probabilities[previous_hidden_state][-1] * markov_chain_transition_mat[previous_hidden_state][hidden_state] * markov_chain_emissions_mat[hidden_state][visible_states[time_step]]
+                new_prob_temp = np.append(new_prob_temp, prob_of_transition_from_potential_previous_hidden_state)
+            probabilities[hidden_state][-1] = max(new_prob_temp)
+            #probabilities[hidden_state] = np.array([1,2])
+
+            
+    #Stage 3 original    
+    """for p in probabilities:
       #pdb.set_trace()
       if p[0] > p[1]:
         weather.append('S')
       else:
-        weather.append('R')
+        weather.append('R')"""
+
+    #Stage 3 v2
+    for time_step in range(0, len(visible_states)):
+        predicted_hidden_state = np.argmax(probabilities[:,time_step])
+        predicted_hidden_states = np.append(predicted_hidden_states, predicted_hidden_state)
+    
+    
+    
+visible_states = np.array([0,0,1,1,1,0])
+markov_chain_transition_mat = np.array([[0.8, 0.2], [0.4, 0.6]])
+markov_chain_emissions_mat = np.array([[0.8, 0.2], [0.4, 0.6]])
+initial_dis = np.array([0.67, 0.33])
 
 
+output = return_viterbi_prediction(visible_states, markov_chain_transition_mat, markov_chain_emissions_mat, initial_dis)
+print(output)
 
 
 
