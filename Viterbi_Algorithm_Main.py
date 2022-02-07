@@ -331,7 +331,7 @@ def return_viterbi_prediction(visible_states, markov_chain_transition_mat, marko
             probabilities = np.insert(probabilities, [len(probabilities[0])], none_array, axis=1)
             new_prob_temp = np.array([])
             for previous_hidden_state in range(0, hid_states_qty):
-                prob_of_transition_from_potential_previous_hidden_state = probabilities[previous_hidden_state][-1] * markov_chain_transition_mat[previous_hidden_state][hidden_state] * markov_chain_emissions_mat[hidden_state][visible_states[time_step]]
+                prob_of_transition_from_potential_previous_hidden_state = probabilities[previous_hidden_state][-2] * markov_chain_transition_mat[previous_hidden_state][hidden_state] * markov_chain_emissions_mat[hidden_state][visible_states[time_step]]
                 new_prob_temp = np.append(new_prob_temp, prob_of_transition_from_potential_previous_hidden_state)
             probabilities[hidden_state][-1] = max(new_prob_temp)
             #probabilities[hidden_state] = np.array([1,2])
