@@ -10,7 +10,7 @@ Created on Tue Feb  1 15:31:32 2022
 runcell('imports', 'C:/Users/fabio/OneDrive/Documents/Studies/Viterbi_Project/Viterbi-Probability-Project/Viterbi_Algorithm_Main.py')
 runcell('general parameters', 'C:/Users/fabio/OneDrive/Documents/Studies/Viterbi_Project/Viterbi-Probability-Project/Viterbi_Algorithm_Main.py')
 runcell('functions', 'C:/Users/fabio/OneDrive/Documents/Studies/Viterbi_Project/Viterbi-Probability-Project/Viterbi_Algorithm_Main.py')
-runcell('Script', 'C:/Users/fabio/OneDrive/Documents/Studies/Viterbi_Project/Viterbi-Probability-Project/Viterbi_Algorithm_Main.py')
+runcell('script', 'C:/Users/fabio/OneDrive/Documents/Studies/Viterbi_Project/Viterbi-Probability-Project/Viterbi_Algorithm_Main.py')
 
 #%% imports
 
@@ -33,13 +33,16 @@ from scipy.linalg import eig
 chain_length = 6
 
 
-#%% Script
-            
+#%% script
+
+
+#Generate the markov chain matrixes
 MC = markov_chain()            
 MC.transitions_matrix = generate_transition_matrix_step(MC.hidden_states_qty, MC.average_0_transition_links)
 MC.emissions_matrix = generate_emissions_matrix_step(MC.hidden_states_qty, MC.visible_states_qty, MC.average_0_emission_links)
 MC.initial_distribution = return_stationary_distribution(MC.transitions_matrix)
 
+#Generate markov chain states
 rep1 = repitition()
 rep1.markov_chain = MC
 rep1.hidden_states = generate_hidden_markov_chain(rep1.markov_chain, chain_length)
@@ -47,12 +50,41 @@ rep1.visible_states = generate_visible_markov_chain(rep1.markov_chain, rep1)
 rep1.viterbi_prediction = viterbi_algorithm(MC.transitions_matrix, MC.emissions_matrix, MC.initial_distribution, rep1.visible_states)
 rep1.most_likely_prediction, rep1.most_likely_probability, rep1.P_Y = full_DOE_scan_of_hidden_MC_chain_approach_dev(rep1.visible_states, MC.transitions_matrix, MC.emissions_matrix, MC.initial_distribution)
 
-#%% Script under development
+
+# rate the predictions
+output_a, output_b, output_c = return_rating_stats_on_prediction(rep1.hidden_states, rep1.viterbi_prediction)
+rep1.viterbi_correct = output_a
+rep1.viterbi_correct_rate = output_b
+rep1.viterbi_correct_history = output_c
+
+output_d, output_e, output_f = return_rating_stats_on_prediction(rep1.hidden_states, rep1.most_likely_prediction)
+rep1.most_likely_correct = output_d
+rep1.most_likely_correct_rate = output_e
+rep1.most_likely_correct_history = output_f
+
+rep1.viterbi_probability = return_P_Y_X_P_X_of_markov_chain(rep1.visible_states, MC.transitions_matrix, MC.emissions_matrix, MC.initial_distribution, rep1.viterbi_prediction) / rep1.P_Y 
+
+
+#%% function under script
+
+
 
 
 
 #%% function under development
 
+#def display(**name):     
+#    print (name["fname"]+" "+name["mname"]+" "+name["lname"])
+
+class func:
+    def __init__(self, **args):
+        self.a = args["a"]
+        self.b = None
+        
+      
+# Driver's code
+
+a = func(a = "f")
 
 
 
@@ -67,14 +99,14 @@ print()
 #%% functions
 
 class markov_chain:
-    def __init__(self):
+    def __init__(self, visible_states_qty = 4, hidden_states_qty = 6, average_0_transition_links = 2.5, average_0_emission_links = 1 ):
         self.emissions_matrix = []
         self.transitions_matrix = []
         self.initial_distribution = []
-        self.visible_states_qty = 4
-        self.hidden_states_qty = 6
-        self.average_0_transition_links = 2.5 #count of the average number of links with a zero probability per state
-        self.average_0_emission_links = 1 #count of the average number of links with a zero probability per state
+        self.visible_states_qty = visible_states_qty
+        self.hidden_states_qty = hidden_states_qty
+        self.average_0_transition_links = average_0_transition_links #count of the average number of links with a zero probability per state
+        self.average_0_emission_links = average_0_emission_links #count of the average number of links with a zero probability per state
 
 
 class repitition:
@@ -450,6 +482,25 @@ def return_P_Y_X_P_X_of_markov_chain(visible_states, transitions_matrix, emissio
     
     return P_Y_X_P_X
 
+
+def return_rating_stats_on_prediction(actual_hidden_MC, predicted_hidden_MC):
+    time_steps = max(len(actual_hidden_MC), len(predicted_hidden_MC))
+    output_completely_correct = None
+    output_most_likely_correct_rate = None
+    output_most_likely_correct_history = np.array([])
+    for i in range(0, time_steps):
+        if actual_hidden_MC[i] == predicted_hidden_MC[i]:
+            output_most_likely_correct_history = np.append(output_most_likely_correct_history, True)
+        else:
+            output_most_likely_correct_history = np.append(output_most_likely_correct_history, False)
+    
+    output_most_likely_correct_rate = output_most_likely_correct_history.sum() / len(output_most_likely_correct_history)
+    if output_most_likely_correct_rate == 1:
+        output_completely_correct = 1
+    else:
+        output_completely_correct = 0
+    
+    return output_completely_correct, output_most_likely_correct_rate, output_most_likely_correct_history 
 
 
 
