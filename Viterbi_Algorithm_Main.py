@@ -42,19 +42,16 @@ MC.initial_distribution = return_stationary_distribution(MC.transitions_matrix)
 
 rep1 = repitition()
 rep1.markov_chain = MC
-rep1.hidden_states = generate_hidden_markov_chain(MC, chain_length)
-rep1.visible_states = generate_visible_markov_chain(MC, rep1)
+rep1.hidden_states = generate_hidden_markov_chain(rep1.markov_chain, chain_length)
+rep1.visible_states = generate_visible_markov_chain(rep1.markov_chain, rep1)
+rep1.viterbi_prediction = viterbi_algorithm(MC.transitions_matrix, MC.emissions_matrix, MC.initial_distribution, rep1.visible_states)
+rep1.most_likely_prediction, rep1.most_likely_probability, rep1.P_Y = full_DOE_scan_of_hidden_MC_chain_approach_dev(rep1.visible_states, MC.transitions_matrix, MC.emissions_matrix, MC.initial_distribution)
+
+#%% Script under development
 
 
 
-
-#%%
-
-
-
-
-
-
+#%% function under development
 
 
 
@@ -88,10 +85,15 @@ class repitition:
         self.viterbi_prediction = []
         self.viterbi_probability = None
         self.viterbi_correct = None
+        self.viterbi_correct_rate = None
+        self.viterbi_correct_history = None
         
         self.most_likely_prediction = []
         self.most_likely_probability = None
         self.most_likely_correct = None
+        self.most_likely_correct_rate = None
+        self.most_likely_correct_history = None
+        self.P_Y = None
         
         self.markov_chain = None
 
@@ -212,7 +214,10 @@ def check_all_states_in_same_communication_class_transmission(input_transitions_
         test_distribution = np.zeros(6)
         test_distribution[row] = 1
         for i in range(0,length_of_matrix + 2):
-            test_distribution = np.matmul(test_distribution, input_transitions_matrix)
+            try:
+                test_distribution = np.matmul(test_distribution, input_transitions_matrix)
+            except ValueError as err:
+                print("FG_BUG Fabio you need to understand why this crash happens half of the time")
         if  (test_distribution == 0).sum() > 0:
             all_states_in_commincation = False
     
@@ -264,107 +269,193 @@ def generate_visible_markov_chain(input_markov_chain_obj, rep_input):
         output_vis_mc = np.append(output_vis_mc, new_vis_state) 
     return output_vis_mc
 
+
+def viterbi_algorithm(transitions_matrix, emissions_matrix, initial_distribution, visible_states):
+   
+    
+    
+    probabilities = np.empty([np.size(emissions_matrix, 0), len(visible_states)])
+    probabilities[:] = np.NaN
+    most_likely_hidden_states = np.array([])
+    
+    # calculate the probability of each hidden state for the first time step
+    for hidden in range(0, np.size(emissions_matrix,0)):
+        try:
+            probabilities[hidden, 0] = initial_distribution[hidden] * emissions_matrix[hidden, int(visible_states[0])]
+        except IndexError as err:
+            print("FG_DEBUG")
+    
+    #calculation of the every other time step
+    for time_step in range(1, len(visible_states)):
+        for current_hidden in range(0, np.size(emissions_matrix,0)):
+            considered_possibilities = np.array([])
+            for previous_hidden in range(0, np.size(emissions_matrix,0)):
+                additional_prob = probabilities[previous_hidden, time_step - 1] * transitions_matrix[previous_hidden, current_hidden] * emissions_matrix[current_hidden, int(visible_states[time_step-1])]
+                considered_possibilities = np.append(considered_possibilities, additional_prob)
+            probabilities[current_hidden, time_step] = considered_possibilities.max()
+
+    
+    #log the model likely hidden states from each time step
+    for time_step in range(0, len(visible_states)):
+        time_step_probs = probabilities[:,0]
+        most_likely_state = np.argmax(time_step_probs)
+        most_likely_hidden_states = np.append(most_likely_hidden_states, int(most_likely_state))    
+    
+    return most_likely_hidden_states
+
+
+def permutations_generator(time_step_qtp, possible_states_qty):
+    # This method returns every permutation of a give markov chain, to be later used by brute force testing of a state
+
+
+    output_as_array = []
+    output_as_string = []
+    perm_qty = possible_states_qty ** time_step_qtp
+    for perm_num in range(0, perm_qty):
+        #pdb.set_trace()  
+        #print(str(perm_num))
+        permutation_makeup = DecimalToNonDecimal(perm_num, possible_states_qty, "", time_step_qtp)
+        output_as_string.append(permutation_makeup)
+        perm_output = []
+        
+        for state_num in range(0, len(permutation_makeup)):
+            identity = int(permutation_makeup[state_num])
+            perm_output.append(identity)
+      
+        output_as_array.append(perm_output)
+    
+    return output_as_array, output_as_string
+
+#permutations_generator(2, ["A","B"])[1][1][1]
+
+
+
+def DecimalToNonDecimal(num, new_number_base, st, length):
+    
+    if num >= new_number_base:
+        
+        st1 = DecimalToNonDecimal(num // new_number_base, new_number_base, st, length -1)
+        st2 = str(num % new_number_base)
+        #pdb.set_trace()
+        st = st1 + st2
+    else:
+      st = str(num)
+
+    if len(st) < length:
+      for i in range(len(st), length):
+        #pdb.set_trace()
+        st = '0' + st
+
+    return st
+    #print(num % new_number_base, end = '')
+
+
+def fg_counter(counter_value, total_iterations_qty, number_of_updates_required_for_total_run = 10, start = datetime.now(), update_counter = False, report = ""):
+    #""" you will need to deploy a counter variable outside this method """
+    if float(counter_value) % int(total_iterations_qty / number_of_updates_required_for_total_run) == 0:
+        print("-----  " + report)
+        print(datetime.now())
+        PC = float(float(counter_value) / total_iterations_qty)
+        print(str(counter_value) + " / " + str(total_iterations_qty))
+        print(PC)
+        print("end estimate @: " + str((datetime.now() - start) * (total_iterations_qty / counter_value) + datetime.now()))
+        if update_counter == True:
+            return PC
+
+
+def full_DOE_scan_of_hidden_MC_chain_approach_dev(visible_states, transitions_matrix, emissions_matrix, initial_distribution):
+    
+    """
+    This method works be running through every permutation of the possible hidden states and calculating the independent probability of them happening with the previously stated visible state
+    So if Y is the observed markov chain (states) and X is the hidden MC (states). Then this method calculates (for each permutation):
+    P(Y|X) * P(X)
+    
+    The value of P(Y) is calculated by summing every value of P(Y|X) * P(X) for every possible value of P(X) (which are produced by the permutation value)
+    The named variable for P(Y) is currently [Total_Probabilities]
+    
+    
+    This description is not complete XXXX
+     
+    """
+                                              
+    #secondary parameters and variables
+    length_of_period = len(visible_states)
+    num_hidden_states =  len(transitions_matrix)
+    potentialPaths_qty = num_hidden_states**length_of_period
+    Probabilities = np.array([])
+    Total_Probabilities = 0
+    
+    #generate every potential hidden state MC
+    potentialPaths_as_array, potentialPaths_as_string = permutations_generator(length_of_period, num_hidden_states)
+    
+    #do the following for every permutation (i.e. possible hidden state MC)
+    probability_of_permutations = []
+    counter = 0
+    start = datetime.now()
+    for perm in range(0,len(potentialPaths_as_array)):
+        
+        counter += 1
+        #fg_counter(counter, len(potentialPaths_as_array), 1, start, False, "Hello")
+        
+        #this first for loop appends all the probabilities required to statisty the previous stated visible states and the hidden state of the permutation
+        prob_temp = return_P_Y_X_P_X_of_markov_chain(visible_states, transitions_matrix, emissions_matrix, initial_distribution, potentialPaths_as_array[perm])
+        
+        Probabilities = np.append(Probabilities, prob_temp)
+        #the probability of each potential hidden state and visible state conbination are then added to the total to calculate the value of P(Y)
+        Total_Probabilities = Total_Probabilities + prob_temp
+      
+    # Once each each values for P(Y|X)P(X) for each value of X are collected. All the model must do is extract the highest value and devide it by sum{ P(Y|X)P(X), for every value of X} to find P(Y)
+    index_of_most_likely_perm = int(np.argmax(Probabilities))
+    
+    
+    ##### convertion of P(Y|X)P(X) in to P(X|Y)
+    
+    
+    """commented this out as its likely an unneeded calculationj"""
+    #Probabilities_P_X_Y = np.array([])
+    #Probabilities_P_X_Y  = np.empty([len(potentialPaths_as_array)])
+    #Probabilities_P_X_Y[:] = np.NaN
+    #for perm in range(0,len(potentialPaths_as_array)):
+        #Probabilities_P_X_Y[perm] = Probabilities / Total_Probabilities
+        
+    most_likely_hidden_states = np.array(potentialPaths_as_array[index_of_most_likely_perm])
+    P_X_Y_most_likely_perm = Probabilities[index_of_most_likely_perm] / Total_Probabilities
+    P_Y = Total_Probabilities
+    
+    return most_likely_hidden_states, P_X_Y_most_likely_perm, P_Y
+    
+def return_P_Y_X_P_X_of_markov_chain(visible_states, transitions_matrix, emissions_matrix, initial_distribution, supposed_hidden_states):
+    """returns the probability of P(Y|X)P(X) for a given supposed hidden MC and visible MC pair"""
+    P_Yn_Xn = np.array([])
+    P_Xn_Xn_min1 = np.array([])
+    for day in range(0,len(visible_states)):
+      
+        X_hidden_state = int(supposed_hidden_states[day])
+        Y_visible_state  = int(visible_states[day])
+    
+        if day == 0:
+          P_Xn_Xn_min1 = np.append(P_Xn_Xn_min1, initial_distribution[X_hidden_state])
+        else:
+          P_X_hidden_state_min1 = int(supposed_hidden_states[day - 1])
+          P_Xn_Xn_min1 = np.append(P_Xn_Xn_min1, transitions_matrix[P_X_hidden_state_min1, X_hidden_state])  #check this reference works
+        P_Yn_Xn = np.append(P_Yn_Xn, emissions_matrix[X_hidden_state][Y_visible_state])
+    
+    #this second loop then multiplies all the previous probabilities
+    prob_temp = 1
+    for day in range(0, len(P_Xn_Xn_min1)):
+        #pdb.set_trace()
+        prob_temp = prob_temp * P_Xn_Xn_min1[day] * P_Yn_Xn[day]
+    
+    P_Y_X_P_X = prob_temp 
+    
+    return P_Y_X_P_X
+
+
+
+
+
 #%% Viterbi from previous
 
-
-def return_viterbi_prediction(visible_states, markov_chain_transition_mat, markov_chain_emissions_mat, initial_dis):
-
-    # TransitionProbabilities
-    """p_ss = 0.8
-    p_sr = 0.2
-    p_rs = 0.4
-    p_rr = 0.6
-    
-    # Initial Probabilities
-    p_s = 2/3
-    p_r = 1/3
-    
-    # Emission Probabilities
-    p_sh = 0.8
-    p_sg = 0.2
-    p_rh = 0.4
-    p_rg = 0.6"""
-    
-    
-    """moods = ['H', 'H', 'G', 'G', 'G', 'H']"""
-    probabilities = None
-    predicted_hidden_states = np.array([])
-    vis_states_qty = len(markov_chain_transition_mat)
-    hid_states_qty = len(markov_chain_emissions_mat)
-    
-    
-    #stage 1 original
-    """if moods[0] == 'H':
-      probabilities.append((p_s*p_sh, p_r*p_rh))
-    else:
-      probabilities.append((p_s*p_sg, p_r*p_rg))"""
-    
-    #stage 1 v2
-    
-    probabilities = np.array([initial_dis[0] * markov_chain_emissions_mat[0][visible_states[0]]])
-    for i in range(1, hid_states_qty):
-        probabilities = np.vstack((probabilities, initial_dis[i] * markov_chain_emissions_mat[i][visible_states[0]]))
-        
-
-    #stage 2 original
-    """for i in range(1, len(moods)):
-      yesterday_sunny, yesterday_rainy = probabilities[-1]
-      if moods[i] =='H':
-        today_sunny = max(yesterday_sunny*p_ss*p_sh, yesterday_rainy*p_rs*p_sh)
-        today_rainy = max(yesterday_sunny*p_sr*p_rh, yesterday_rainy*p_rr*p_rh)
-        probabilities.append((today_sunny, today_rainy))
-      else:
-        today_sunny = max(yesterday_sunny*p_ss*p_sg, yesterday_rainy*p_rs*p_sg)
-        today_rainy = max(yesterday_sunny*p_sr*p_rg, yesterday_rainy*p_rr*p_rg)
-        probabilities.append((today_sunny, today_rainy))"""
-    
-    #this none array is added to the end of each 
-    none_array = np.array([None])
-    for hidden_state in range(1, hid_states_qty):
-        none_array = np.vstack((none_array, [None]))
-    
-    
-    #stage 2 v2
-    for time_step in range(1, len(visible_states)):
-        now_probabilities = np.array([])
-        for hidden_state in range(0, hid_states_qty):
-            probabilities = np.insert(probabilities, [len(probabilities[0])], none_array, axis=1)
-            new_prob_temp = np.array([])
-            for previous_hidden_state in range(0, hid_states_qty):
-                prob_of_transition_from_potential_previous_hidden_state = probabilities[previous_hidden_state][-2] * markov_chain_transition_mat[previous_hidden_state][hidden_state] * markov_chain_emissions_mat[hidden_state][visible_states[time_step]]
-                new_prob_temp = np.append(new_prob_temp, prob_of_transition_from_potential_previous_hidden_state)
-            probabilities[hidden_state][-1] = max(new_prob_temp)
-            #probabilities[hidden_state] = np.array([1,2])
-
-            
-    #Stage 3 original    
-    """for p in probabilities:
-      #pdb.set_trace()
-      if p[0] > p[1]:
-        weather.append('S')
-      else:
-        weather.append('R')"""
-
-    #Stage 3 v2
-    for time_step in range(0, len(visible_states)):
-        predicted_hidden_state = np.argmax(probabilities[:,time_step])
-        predicted_hidden_states = np.append(predicted_hidden_states, predicted_hidden_state)
-    
-    
-    
-visible_states = np.array([0,0,1,1,1,0])
-markov_chain_transition_mat = np.array([[0.8, 0.2], [0.4, 0.6]])
-markov_chain_emissions_mat = np.array([[0.8, 0.2], [0.4, 0.6]])
-initial_dis = np.array([0.67, 0.33])
-
-
-output = return_viterbi_prediction(visible_states, markov_chain_transition_mat, markov_chain_emissions_mat, initial_dis)
-print(output)
-
-
-
-
-#%%
         
 
 
